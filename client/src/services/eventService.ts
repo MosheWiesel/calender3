@@ -81,6 +81,39 @@ const convertFromFirestoreEvent = (doc: any): Event => {
     };
 };
 
+// פונקציה שבודקת אם המשתמש הוא מנהל
+export const isAdmin = (userEmail: string | null) => {
+    return userEmail === 'mw6701964@gmail.com';
+};
+
+// פונקציה למחיקת כל האירועים של המנהל
+export const deleteAllAdminEvents = async () => {
+    try {
+        // מוודא שהקולקציה קיימת לפני המחיקה
+        const eventsRef = collection(db, EVENTS_COLLECTION);
+        
+        // מקבל את כל האירועים של המנהל
+        const adminEventsQuery = query(
+            eventsRef,
+            where('createdBy', '==', 'mw6701964@gmail.com')
+        );
+        
+        const querySnapshot = await getDocs(adminEventsQuery);
+        
+        // מחיקת כל האירועים
+        const deletePromises = querySnapshot.docs.map(doc => deleteDoc(doc.ref));
+        await Promise.all(deletePromises);
+        
+        return {
+            success: true,
+            deletedCount: querySnapshot.size
+        };
+    } catch (error) {
+        console.error('שגיאה במחיקת האירועים:', error);
+        throw new Error('שגיאה במחיקת האירועים');
+    }
+};
+
 export const eventService = {
     async createEvent(event: Omit<Event, 'id' | 'createdAt' | 'updatedAt'>) {
         try {

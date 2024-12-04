@@ -1,6 +1,6 @@
-import { Box, Button, CircularProgress, Container, Paper, Typography } from '@mui/material';
+import { Alert, Box, Button, Container, Paper, Snackbar, Typography } from '@mui/material';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { auth } from '../firebase/config';
 
 const GoogleLogoSvg = () => (
@@ -13,43 +13,28 @@ const GoogleLogoSvg = () => (
 );
 
 const Login = () => {
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      setIsLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleGoogleSignIn = async () => {
+    setIsLoading(true);
+    setError(null);
     try {
-      setIsLoading(true);
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error signing in with Google:', error);
+      if (error.code === 'auth/unauthorized-domain') {
+        setError('הדומיין של האתר לא מורשה. אנא פנה למנהל המערכת.');
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        setError('החלון נסגר לפני השלמת ההתחברות.');
+      } else {
+        setError('אירעה שגיאה בתהליך ההתחברות. אנא נסה שוב.');
+      }
+    } finally {
       setIsLoading(false);
     }
   };
-
-  if (isLoading) {
-    return (
-      <Container 
-        maxWidth={false} 
-        sx={{ 
-          height: '100vh', 
-          display: 'flex', 
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'linear-gradient(135deg, #f5f5f5 0%, #ffffff 100%)'
-        }}
-      >
-        <CircularProgress size={40} thickness={4} sx={{ color: '#4285F4' }} />
-      </Container>
-    );
-  }
 
   return (
     <Container 
@@ -131,7 +116,9 @@ const Login = () => {
           }}
         >
           {isLoading ? (
-            <CircularProgress size={24} thickness={4} sx={{ color: '#4285F4' }} />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              טוען...
+            </Box>
           ) : (
             <>
               <Box sx={{ 
@@ -177,6 +164,17 @@ const Login = () => {
           )}
         </Button>
       </Paper>
+
+      <Snackbar 
+        open={!!error} 
+        autoHideDuration={6000} 
+        onClose={() => setError(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setError(null)} severity="error" sx={{ width: '100%' }}>
+          {error}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };

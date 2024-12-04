@@ -1,42 +1,46 @@
+import { EventClickArg, EventContentArg } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import multiMonthPlugin from '@fullcalendar/multimonth';
 import FullCalendar from '@fullcalendar/react';
 import {
-    AccessTime as AccessTimeIcon,
-    AccountCircle,
-    Add as AddIcon,
-    ChevronLeft,
-    ChevronRight,
-    Delete as DeleteIcon,
-    Description as DescriptionIcon,
-    Edit as EditIcon,
-    ExitToApp,
-    Public as PublicIcon,
-    Today as TodayIcon
+  AccountCircle,
+  Add as AddIcon,
+  ChevronLeft,
+  ChevronRight,
+  Delete as DeleteIcon,
+  Edit as EditIcon,
+  ExitToApp,
+  Public as PublicIcon,
+  Today as TodayIcon
 } from '@mui/icons-material';
+import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import {
-    Alert,
-    Box,
-    Button,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogTitle,
-    IconButton,
-    Paper,
-    Popover,
-    Snackbar,
-    TextField,
-    Tooltip,
-    Typography,
-    useTheme
+  Alert,
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  IconButton,
+  Paper,
+  Snackbar,
+  TextField,
+  Tooltip,
+  Typography,
+  useTheme
 } from '@mui/material';
+import { format } from 'date-fns';
+import { he } from 'date-fns/locale';
 import React, { useEffect, useRef, useState } from 'react';
+import { auth } from '../firebase/config';
 import { Event } from '../models/Event';
 import { authService } from '../services/authService';
-import { eventService } from '../services/eventService';
+import { deleteAllAdminEvents, eventService, isAdmin } from '../services/eventService';
 import AuthDialog from './AuthDialog';
+import EventCard from './EventCard';
 
 const Calendar: React.FC = () => {
   const theme = useTheme();
@@ -56,11 +60,14 @@ const Calendar: React.FC = () => {
     severity: 'success'
   });
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
-  const [hoveredEvent, setHoveredEvent] = useState<{ event: Event; anchorEl: HTMLElement } | null>(null);
+  const [hoveredEvent, setHoveredEvent] = useState<{ event: Event; element: HTMLElement } | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isConfirmDeleteDialogOpen, setIsConfirmDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const currentUser = auth.currentUser;
 
-  const isAdmin = () => {
-    const currentUser = authService.getCurrentUser();
-    return currentUser?.email === 'mw6701964@gmail.com';
+  const checkIsAdmin = () => {
+    return isAdmin(currentUser?.email || null);
   };
 
   const fetchEvents = async () => {
@@ -108,23 +115,27 @@ const Calendar: React.FC = () => {
     setIsEventDialogOpen(true);
   };
 
-  const handleEventClick = (info: any) => {
-    const event = events.find(e => e.id === info.event.id);
-    if (event) {
-      const currentUser = authService.getCurrentUser();
-      const canEdit = currentUser && (
-        event.createdBy === currentUser.uid || 
-        (isAdmin() && event.isGlobalAdminEvent)
-      );
-      
-      if (canEdit) {
-        setSelectedEvent(event);
-        setEventTitle(event.title);
-        setEventDescription(event.description);
-        setIsGlobalAdminEvent(event.isGlobalAdminEvent || false);
-        setSelectedDate(new Date(event.startDate));
-        setIsEventDialogOpen(true);
-      }
+  const handleEventClick = async (clickInfo: EventClickArg) => {
+    if (!currentUser) {
+      setShowAuthDialog(true);
+      return;
+    }
+
+    const event = events.find(e => e.id === clickInfo.event.id);
+    if (!event) return;
+
+    const canEdit = currentUser && (
+      event.createdBy === currentUser.uid || 
+      (checkIsAdmin() && event.isGlobalAdminEvent)
+    );
+
+    if (canEdit) {
+      setSelectedEvent(event);
+      setEventTitle(event.title);
+      setEventDescription(event.description);
+      setIsGlobalAdminEvent(event.isGlobalAdminEvent || false);
+      setSelectedDate(new Date(event.startDate));
+      setIsEventDialogOpen(true);
     }
   };
 
@@ -141,7 +152,7 @@ const Calendar: React.FC = () => {
     }
 
     try {
-      const isUserAdmin = isAdmin();
+      const isUserAdmin = checkIsAdmin();
       const eventData = {
         title: eventTitle,
         description: eventDescription,
@@ -190,7 +201,8 @@ const Calendar: React.FC = () => {
       setIsEventDialogOpen(false);
       fetchEvents();
     } catch (error) {
-      showSnackbar('שגיאה במחיקת האירוע', 'error');
+      console.error('Error deleting event:', error);
+      showSnackbar('אירעה שגיאה במחיקת האירוע', 'error');
     }
   };
 
@@ -232,11 +244,8 @@ const Calendar: React.FC = () => {
     return `${months[date.getMonth()]} ${date.getFullYear()}`;
   };
 
-  const handleEventMouseEnter = (info: any, element: HTMLElement) => {
-    const event = events.find(e => e.id === info.event.id);
-    if (event) {
-      setHoveredEvent({ event, anchorEl: element });
-    }
+  const handleEventMouseEnter = (event: Event, element: HTMLElement) => {
+    setHoveredEvent({ event, element });
   };
 
   const handleEventMouseLeave = () => {
@@ -244,10 +253,9 @@ const Calendar: React.FC = () => {
   };
 
   const canEditEvent = (event: Event) => {
-    const currentUser = authService.getCurrentUser();
     return currentUser && (
       event.createdBy === currentUser.uid || 
-      (isAdmin() && event.isGlobalAdminEvent)
+      (checkIsAdmin() && event.isGlobalAdminEvent)
     );
   };
 
@@ -260,47 +268,72 @@ const Calendar: React.FC = () => {
     });
   };
 
-  const eventContent = (eventInfo: any) => {
+  const eventContent = (eventInfo: EventContentArg) => {
     const event = events.find(e => e.id === eventInfo.event.id);
-    const isGlobalEvent = event?.isGlobalAdminEvent;
+    if (!event) return null;
 
     return (
-      <Box 
-        sx={{ 
-          p: 0.5,
-          cursor: canEditEvent(event!) ? 'pointer' : 'default',
-          '&:hover': canEditEvent(event!) ? {
-            filter: 'brightness(0.9)'
-          } : {},
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          maxWidth: '100%',
+      <Box
+        onMouseEnter={(e) => {
+          e.stopPropagation();
+          setHoveredEvent({ event, element: e.currentTarget });
+        }}
+        onMouseLeave={() => setHoveredEvent(null)}
+        sx={{
+          p: 1,
+          cursor: 'pointer',
+          width: '100%',
+          height: '100%',
+          bgcolor: '#1a73e8',
+          color: '#ffffff',
+          borderRadius: 1,
+          '&:hover': {
+            bgcolor: '#1557b0',
+          },
           display: 'flex',
           alignItems: 'center',
-          gap: 0.5,
-          borderRadius: '4px'
+          gap: 0.5
         }}
       >
+        {event.isGlobalAdminEvent && (
+          <PublicIcon sx={{ fontSize: '0.875rem' }} />
+        )}
         <Typography 
           variant="body2" 
+          noWrap 
           sx={{ 
-            fontWeight: isGlobalEvent ? 600 : 500,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            flex: 1,
-            color: 'white',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 0.5
+            fontWeight: 500,
+            fontSize: '0.875rem',
+            lineHeight: 1.2
           }}
         >
-          {isGlobalEvent && <PublicIcon sx={{ fontSize: '1rem' }} />}
-          {eventInfo.event.title}
+          {event.title}
         </Typography>
       </Box>
     );
+  };
+
+  const handleDeleteAllEvents = async () => {
+    setIsConfirmDeleteDialogOpen(false);
+    setIsDeleting(true);
+    try {
+      const result = await deleteAllAdminEvents();
+      alert(`נמחקו ${result.deletedCount} אירועים בהצלחה`);
+      // רענון האירועים בלוח
+      fetchEvents();
+    } catch (error) {
+      alert('אירעה שגיאה במחיקת האירועים');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const getDayLabel = (date: Date) => {
+    return format(date, 'EEEE', { locale: he });
+  };
+
+  const getMonthLabel = () => {
+    return format(currentDate, 'MMMM yyyy', { locale: he });
   };
 
   useEffect(() => {
@@ -354,7 +387,7 @@ const Calendar: React.FC = () => {
                   </IconButton>
                 </Box>
                 <Typography variant="h6" sx={{ color: 'text.secondary', fontWeight: 500, minWidth: '150px' }}>
-                  {formatHebrewDate(currentDate)}
+                  {getMonthLabel()}
                 </Typography>
               </Box>
               <Box sx={{ display: 'flex', gap: 1 }}>
@@ -532,7 +565,7 @@ const Calendar: React.FC = () => {
                 }}
               />
             </Box>
-            {isAdmin() && (
+            {checkIsAdmin() && (
               <Box sx={{ 
                 display: 'flex', 
                 alignItems: 'center', 
@@ -594,50 +627,103 @@ const Calendar: React.FC = () => {
         </Alert>
       </Snackbar>
 
-      <Popover
-        open={Boolean(hoveredEvent)}
-        anchorEl={hoveredEvent?.anchorEl}
-        onClose={() => setHoveredEvent(null)}
-        anchorOrigin={{
-          vertical: 'bottom',
-          horizontal: 'center',
-        }}
-        transformOrigin={{
-          vertical: 'top',
-          horizontal: 'center',
-        }}
-        PaperProps={{
-          sx: {
-            p: 2,
-            maxWidth: 400,
-            borderRadius: 2,
-            boxShadow: theme.shadows[3]
-          }
-        }}
-        sx={{ pointerEvents: 'none' }}
+      {hoveredEvent && (
+        <EventCard
+          event={hoveredEvent.event}
+          anchorEl={hoveredEvent.element}
+          onClose={() => setHoveredEvent(null)}
+        />
+      )}
+
+      {checkIsAdmin() && (
+        <IconButton
+          onClick={() => setIsDeleteDialogOpen(true)}
+          sx={{
+            position: 'absolute',
+            top: '16px',
+            left: '16px',
+            backgroundColor: '#fff',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            '&:hover': {
+              backgroundColor: '#f5f5f5'
+            }
+          }}
+          disabled={isDeleting}
+        >
+          <DeleteForeverIcon color="error" />
+        </IconButton>
+      )}
+
+      <Dialog
+        open={isDeleteDialogOpen}
+        onClose={() => setIsDeleteDialogOpen(false)}
+        dir="rtl"
       >
-        {hoveredEvent && (
-          <Box>
-            <Typography variant="h6" sx={{ mb: 1, color: 'primary.main', fontWeight: 600 }}>
-              {hoveredEvent.event.title}
+        <DialogTitle sx={{ color: 'error.main', fontWeight: 'bold' }}>
+          אזהרה - מחיקת כל האירועים
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            האם אתה בטוח שברצונך למחוק את כל האירועים שלך?
+            <br />
+            <Typography color="error" sx={{ mt: 2, fontWeight: 'bold' }}>
+              פעולה זו היא בלתי הפיכה!
             </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-              <AccessTimeIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
-              <Typography variant="body2" color="text.secondary">
-                {formatEventDate(hoveredEvent.event.startDate)}
-              </Typography>
-            </Box>
-            {hoveredEvent.event.description && (
-              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                <DescriptionIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
-                <Typography variant="body2" color="text.secondary">
-                  {hoveredEvent.event.description}
-                </Typography>
-              </Box>
-            )}
-          </Box>
-        )}
-      </Popover>
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setIsDeleteDialogOpen(false)} color="primary">
+            ביטול
+          </Button>
+          <Button
+            onClick={() => {
+              setIsDeleteDialogOpen(false);
+              setIsConfirmDeleteDialogOpen(true);
+            }}
+            color="error"
+            variant="contained"
+          >
+            המשך למחיקה
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={isConfirmDeleteDialogOpen}
+        onClose={() => setIsConfirmDeleteDialogOpen(false)}
+        dir="rtl"
+      >
+        <DialogTitle sx={{ color: 'error.main', fontWeight: 'bold' }}>
+          אישור סופי - אין דרך חזרה
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            זהו אישור סופי למחיקת כל האירועים שלך.
+            <br />
+            <Typography color="error" sx={{ mt: 2, fontWeight: 'bold' }}>
+              האם אתה באמת בטוח שברצונך למחוק את כל האירועים?
+              <br />
+              לא ניתן יהיה לשחזר אותם!
+            </Typography>
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setIsConfirmDeleteDialogOpen(false)} 
+            color="primary"
+          >
+            ביטול
+          </Button>
+          <Button
+            onClick={handleDeleteAllEvents}
+            color="error"
+            variant="contained"
+            disabled={isDeleting}
+          >
+            {isDeleting ? 'מוחק...' : 'כן, מחק הכל'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
