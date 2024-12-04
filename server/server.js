@@ -11,6 +11,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Basic API endpoint
+app.get('/api', (req, res) => {
+  res.json({ message: 'Calendar API is running' });
+});
+
 // MongoDB Connection
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/calendar', {
   useNewUrlParser: true,

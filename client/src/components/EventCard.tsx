@@ -1,50 +1,30 @@
-import { Box, Card, CardContent, Typography } from '@mui/material';
-import { Event } from '../services/eventService';
+import { Public as PublicIcon } from '@mui/icons-material';
+import { Box, Typography } from '@mui/material';
+import { Event } from '../models/Event';
 
 interface EventCardProps {
-    event: Event;
+  event: Event;
 }
 
 const EventCard: React.FC<EventCardProps> = ({ event }) => {
-    return (
-        <Card 
-            sx={{ 
-                mb: 2,
-                backgroundColor: event.isAdminEvent ? '#e3f2fd' : 'white',
-                borderLeft: event.isAdminEvent ? '5px solid #2196f3' : 'none'
-            }}
-        >
-            <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="h6" component="div">
-                        {event.title}
-                    </Typography>
-                    {event.isAdminEvent && (
-                        <Typography 
-                            variant="caption" 
-                            sx={{ 
-                                backgroundColor: '#2196f3',
-                                color: 'white',
-                                padding: '4px 8px',
-                                borderRadius: '4px'
-                            }}
-                        >
-                            אירוע מנהל
-                        </Typography>
-                    )}
-                </Box>
-                <Typography color="text.secondary">
-                    {event.description}
-                </Typography>
-                <Typography variant="body2">
-                    {new Date(event.startDate).toLocaleDateString('he-IL')}
-                </Typography>
-                <Typography variant="body2">
-                    {event.location}
-                </Typography>
-            </CardContent>
-        </Card>
-    );
+  return (
+    <Box sx={{
+      p: 2,
+      mb: 2,
+      backgroundColor: event.isGlobalAdminEvent ? '#ffebee' : 'white',
+      borderLeft: event.isGlobalAdminEvent ? '5px solid #ef5350' : 'none',
+      borderRadius: 1,
+      boxShadow: 1
+    }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        {event.isGlobalAdminEvent && <PublicIcon sx={{ color: '#ef5350' }} />}
+        <Typography variant="h6">{event.title}</Typography>
+      </Box>
+      <Typography variant="body2" color="text.secondary">
+        {event.description}
+      </Typography>
+    </Box>
+  );
 };
 
 export default EventCard; 

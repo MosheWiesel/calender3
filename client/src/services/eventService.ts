@@ -1,6 +1,5 @@
 import {
     addDoc,
-    and,
     collection,
     deleteDoc,
     doc,
@@ -30,7 +29,7 @@ export interface Event {
     category: string;
     createdAt: Date;
     updatedAt: Date;
-    isAdminEvent?: boolean;
+    isGlobalAdminEvent?: boolean;
 }
 
 interface FirestoreEvent extends Omit<Event, 'startDate' | 'endDate' | 'createdAt' | 'updatedAt'> {
@@ -38,7 +37,7 @@ interface FirestoreEvent extends Omit<Event, 'startDate' | 'endDate' | 'createdA
     endDate: Timestamp;
     createdAt: Timestamp;
     updatedAt: Timestamp;
-    isAdminEvent?: boolean;
+    isGlobalAdminEvent?: boolean;
 }
 
 const convertToFirestoreEvent = (event: Partial<Event>): Partial<FirestoreEvent> => {
@@ -52,63 +51,53 @@ const convertToFirestoreEvent = (event: Partial<Event>): Partial<FirestoreEvent>
     if (event.participants) firestoreEvent.participants = event.participants;
     if (event.isPublic !== undefined) firestoreEvent.isPublic = event.isPublic;
     if (event.category) firestoreEvent.category = event.category;
-    if (event.isAdminEvent !== undefined) firestoreEvent.isAdminEvent = event.isAdminEvent;
+    if (event.isGlobalAdminEvent !== undefined) firestoreEvent.isGlobalAdminEvent = event.isGlobalAdminEvent;
     
     // המר תאריכים ל-Timestamp
-    if (event.startDate) {
-        firestoreEvent.startDate = Timestamp.fromDate(new Date(event.startDate));
-    }
-    if (event.endDate) {
-        firestoreEvent.endDate = Timestamp.fromDate(new Date(event.endDate));
-    }
-    if (event.createdAt) {
-        firestoreEvent.createdAt = Timestamp.fromDate(new Date(event.createdAt));
-    }
-    if (event.updatedAt) {
-        firestoreEvent.updatedAt = Timestamp.fromDate(new Date(event.updatedAt));
-    }
-
+    if (event.startDate) firestoreEvent.startDate = Timestamp.fromDate(event.startDate);
+    if (event.endDate) firestoreEvent.endDate = Timestamp.fromDate(event.endDate);
+    if (event.createdAt) firestoreEvent.createdAt = Timestamp.fromDate(event.createdAt);
+    if (event.updatedAt) firestoreEvent.updatedAt = Timestamp.fromDate(event.updatedAt);
+    
     return firestoreEvent;
 };
 
-const convertFromFirestoreEvent = (id: string, data: FirestoreEvent): Event => ({
-    id,
-    title: data.title,
-    description: data.description,
-    startDate: data.startDate.toDate(),
-    endDate: data.endDate.toDate(),
-    location: data.location,
-    createdBy: data.createdBy,
-    participants: data.participants || [],
-    isPublic: data.isPublic,
-    category: data.category,
-    createdAt: data.createdAt.toDate(),
-    updatedAt: data.updatedAt.toDate(),
-    isAdminEvent: data.isAdminEvent
-});
+const convertFromFirestoreEvent = (doc: any): Event => {
+    const data = doc.data();
+    return {
+        id: doc.id,
+        title: data.title,
+        description: data.description,
+        startDate: data.startDate.toDate(),
+        endDate: data.endDate.toDate(),
+        location: data.location || '',
+        createdBy: data.createdBy,
+        participants: data.participants || [],
+        isPublic: data.isPublic,
+        isGlobalAdminEvent: data.isGlobalAdminEvent || false,
+        category: data.category || 'כללי',
+        createdAt: data.createdAt.toDate(),
+        updatedAt: data.updatedAt.toDate()
+    };
+};
 
 export const eventService = {
     async createEvent(event: Omit<Event, 'id' | 'createdAt' | 'updatedAt'>) {
         try {
             const now = Timestamp.now();
-            const isAdmin = localStorage.getItem('isAdmin') === 'true';
             
             const firestoreEvent = {
                 ...event,
                 startDate: Timestamp.fromDate(new Date(event.startDate)),
                 endDate: Timestamp.fromDate(new Date(event.endDate)),
                 createdAt: now,
-                updatedAt: now,
-                isAdminEvent: isAdmin,
-                isPublic: isAdmin ? true : event.isPublic // אירועי מנהל תמיד ציבוריים
+                updatedAt: now
             };
 
             const docRef = await addDoc(collection(db, EVENTS_COLLECTION), firestoreEvent);
             return {
                 id: docRef.id,
                 ...event,
-                isAdminEvent: isAdmin,
-                isPublic: isAdmin ? true : event.isPublic,
                 createdAt: now.toDate(),
                 updatedAt: now.toDate()
             };
@@ -150,17 +139,14 @@ export const eventService = {
             const q = query(
                 collection(db, EVENTS_COLLECTION),
                 or(
-                    and(
-                        where('createdBy', '==', userId),
-                        where('isPublic', '==', false)
-                    ),
+                    where('createdBy', '==', userId),
                     where('isPublic', '==', true)
                 ),
                 orderBy('startDate', 'desc')
             );
             const querySnapshot = await getDocs(q);
             return querySnapshot.docs.map(doc => 
-                convertFromFirestoreEvent(doc.id, doc.data() as FirestoreEvent)
+                convertFromFirestoreEvent(doc)
             );
         } catch (error) {
             console.error('Error fetching user events:', error);
@@ -177,7 +163,7 @@ export const eventService = {
             );
             const querySnapshot = await getDocs(q);
             return querySnapshot.docs.map(doc => 
-                convertFromFirestoreEvent(doc.id, doc.data() as FirestoreEvent)
+                convertFromFirestoreEvent(doc)
             );
         } catch (error) {
             console.error('Error fetching public events:', error);
