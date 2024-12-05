@@ -371,11 +371,14 @@ const Calendar: React.FC = () => {
               borderBottom: 1,
               borderColor: 'divider'
             }}>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <Typography variant="h5" sx={{ fontWeight: 600, color: 'primary.main', minWidth: '120px' }}>
-                  לוח אירועים
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                <Typography variant="h5" sx={{ fontWeight: 600, color: 'primary.main', minWidth: '150px' }}>
+                  לוח אירועים חודשי
                 </Typography>
-                <Box sx={{ display: 'flex', gap: 1, mx: 2 }}>
+                <Typography variant="h6" sx={{ color: 'text.secondary', fontWeight: 500, minWidth: '150px' }}>
+                  {getMonthLabel()}
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1 }}>
                   <IconButton onClick={() => handleNavigate('prev')} size="small">
                     <ChevronRight />
                   </IconButton>
@@ -386,9 +389,6 @@ const Calendar: React.FC = () => {
                     <ChevronLeft />
                   </IconButton>
                 </Box>
-                <Typography variant="h6" sx={{ color: 'text.secondary', fontWeight: 500, minWidth: '150px' }}>
-                  {getMonthLabel()}
-                </Typography>
               </Box>
               <Box sx={{ display: 'flex', gap: 1 }}>
                 {authService.getCurrentUser() ? (
