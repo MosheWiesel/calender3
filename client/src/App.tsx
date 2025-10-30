@@ -6,6 +6,8 @@ import { Route, Routes } from 'react-router-dom';
 import './App.css';
 import Calendar from './components/Calendar';
 import Login from './components/Login';
+import AdminLogin from './components/AdminLogin';
+import AdminDashboard from './components/AdminDashboard';
 import { auth } from './firebase/config';
 
 const theme = createTheme({
@@ -44,13 +46,11 @@ function App() {
 
   return (
     <ThemeProvider theme={theme}>
-      {!user ? (
-        <Login />
-      ) : (
-        <Routes>
-          <Route path="/" element={<Calendar />} />
-        </Routes>
-      )}
+      <Routes>
+        <Route path="/" element={user ? <Calendar /> : <Login />} />
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin" element={<AdminDashboard />} />
+      </Routes>
     </ThemeProvider>
   );
 }

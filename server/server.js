@@ -5,6 +5,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
@@ -145,6 +146,18 @@ async function initializeAdmin() {
 }
 
 initializeAdmin();
+
+// Serve React build in production
+const clientBuildPath = path.join(__dirname, '../client/build');
+app.use(express.static(clientBuildPath));
+
+app.get('*', (req, res) => {
+  // If request is not an API route, serve React app
+  if (!req.path.startsWith('/api')) {
+    return res.sendFile(path.join(clientBuildPath, 'index.html'));
+  }
+  return res.status(404).json({ message: 'Not found' });
+});
 
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {
